@@ -8,7 +8,7 @@ import numpy as np
 
 @dataclass
 class SensorScenario:
-    """Configuration for one simulated sensor condition."""
+    """Configuration for a sensor condition."""
 
     name: str
     noise_std: float = 0.15
@@ -26,21 +26,32 @@ def simulate_sensor(
     t: np.ndarray,
     scenario: SensorScenario,
     seed: int = 42,
+    fault_start_time: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate true and measured signals for a scenario.
+    """Generate a measurement with an optional fault onset.
 
-    The model is y(t) = x(t) + n(t) + b(t) + d(t).
-    A stuck sensor overrides the measurement with a constant value.
+    Before ``fault_start_time`` the sensor is healthy. At and after the onset,
+    the configured fault is applied. This allows genuine detection-delay and
+    false-alarm measurements.
     """
     rng = np.random.default_rng(seed)
+    t = np.asarray(t, dtype=float)
     truth = true_process(t)
-    noise = rng.normal(0.0, scenario.noise_std, size=t.shape)
-    bias = np.full_like(t, scenario.bias, dtype=float)
-    drift = scenario.drift_rate * np.maximum(t - t[0], 0.0)
-    measured = truth + noise + bias + drift
+    measured = truth + rng.normal(0.0, scenario.noise_std, size=t.shape)
+
+    if fault_start_time is None:
+        active = np.ones_like(t, dtype=bool)
+    else:
+        active = t >= fault_start_time
+
+    if scenario.bias != 0.0:
+        measured[active] += scenario.bias
+
+    if scenario.drift_rate != 0.0 and np.any(active):
+        measured[active] += scenario.drift_rate * (t[active] - fault_start_time)
 
     if scenario.stuck_at is not None:
-        measured = np.full_like(t, scenario.stuck_at, dtype=float)
+        measured[active] = scenario.stuck_at
 
     return truth, measured
 
