@@ -96,4 +96,4 @@ The correlation and variance-ratio features are particularly useful for identify
 
 ## Author
 
-**Dibyo** — Instrumentation Engineering
+**Kanishka Malakar** — Instrumentation Engineering
