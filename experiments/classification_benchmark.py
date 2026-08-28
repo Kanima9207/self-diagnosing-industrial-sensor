@@ -1,4 +1,4 @@
-"""Benchmark interpretable fault classification on post-onset windows."""
+"""Benchmark interpretable fault classification on controlled post-onset windows."""
 
 from __future__ import annotations
 
@@ -39,12 +39,21 @@ def run(trials: int = 100, seed: int = 2026) -> Path:
     for fault in FAULTS:
         for trial in range(1, trials + 1):
             scenario = make_scenario(fault, rng)
-            truth, measured = simulate_sensor(t, scenario, seed=int(rng.integers(0, 2**32 - 1)), fault_start_time=None if fault == "healthy" else onset)
-            # Use a fixed post-onset window. For healthy trials, use the same
-            # final window length to avoid giving the classifier more context.
+            truth, measured = simulate_sensor(
+                t, scenario,
+                seed=int(rng.integers(0, 2**32 - 1)),
+                fault_start_time=None if fault == "healthy" else onset,
+            )
             residual = measured - truth
-            window = residual[start:] if fault != "healthy" else residual[-len(residual[start:]):]
-            features = extract_features(window)
+            window_slice = slice(start, None) if fault != "healthy" else slice(-len(t[start:]), None)
+            residual_window = residual[window_slice]
+            measured_window = measured[window_slice]
+            truth_window = truth[window_slice]
+            features = extract_features(
+                residual_window,
+                measured=measured_window,
+                reference=truth_window,
+            )
             predicted, confidence = classify_features(features)
             rows.append({
                 "fault": fault,
