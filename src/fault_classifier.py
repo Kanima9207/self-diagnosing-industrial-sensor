@@ -8,17 +8,23 @@ from typing import Mapping
 def classify_features(features: Mapping[str, float]) -> tuple[str, float]:
     """Classify residual behavior and return (label, confidence).
 
-    This is an intentionally interpretable baseline. Confidence is a heuristic
-    score, not a calibrated probability.
+    Confidence is a heuristic score, not a calibrated probability.
     """
     mean = abs(features["mean"])
     std = features["std"]
     rms = features["rms"]
     peak = features["peak"]
     slope = abs(features["slope"])
+    correlation = features.get("process_sensor_correlation")
+    variance_ratio = features.get("variance_ratio")
 
-    if std < 0.02 and peak > 0.5:
-        return "stuck", min(0.99, 0.80 + peak / 100.0)
+    # A stuck sensor loses its normal response to process variation. Prefer
+    # this physical signature over residual magnitude alone.
+    if correlation is not None and variance_ratio is not None:
+        if abs(correlation) < 0.20 and variance_ratio < 0.10:
+            confidence = min(0.99, 0.80 + (0.20 - abs(correlation)) + (0.10 - variance_ratio))
+            return "stuck", confidence
+
     if mean > 1.0 and mean > 2.0 * std:
         return "bias", min(0.99, 0.70 + mean / 10.0)
     if slope > 0.01 and mean < 1.5:
